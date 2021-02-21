@@ -1,8 +1,32 @@
 {
-  "name": "hardhat-project",
+  "name": "powder-contracts",
+  "version": "0.1.0",
+  "description": "The smart contracts eco-system of POWDER.finance!",
+  "main": "index.js",
+  "scripts": {
+    "compile": "npx hardhat compile",
+    "test": "npx hardhat test",
+    "deploy:mainnet": "npx hardhat run scripts/deploy.mainnet.js --network mainnet",
+    "deploy:goerli": "npx hardhat run scripts/deploy.goerli.js --network goerli"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/powderfinance/Powderfinance.git"
+  },
+  "keywords": [
+    "powder",
+    "finance",
+    "dapp"
+  ],
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/powderfinance/Powderfinance/issues"
+  },
+  "homepage": "https://github.com/powderfinance/Powderfinance#readme",
   "devDependencies": {
     "@nomiclabs/hardhat-ethers": "^2.0.1",
     "@nomiclabs/hardhat-waffle": "^2.0.1",
+    "@openzeppelin/contracts": "^3.4.0",
     "chai": "^4.3.0",
     "ethereum-waffle": "^3.2.2",
     "ethers": "^5.0.31",
