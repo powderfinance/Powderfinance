@@ -5,7 +5,6 @@ pragma solidity ^0.7.3;
 import "@openzeppelin/contracts/proxy/Clones.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
-import "./interfaces/IPowderPool.sol";
 
 
 contract PoolsFactory is AccessControl {
