@@ -12,19 +12,19 @@ contract FlexiblePool is ReentrancyGuard {
   using SafeERC20 for IERC20;
 
   uint256 [] internal _epochs;
-  uint256 internal _epoch1Start;
-  uint256 internal _epochsCount;
-  uint256 internal _totalAmountPerEpoch;
-  uint256 internal _lastWithdrawEpochId;
-  uint256 internal _lastInitializedEpoch;
+  uint256 public epoch1Start;
+  uint256 public epochsCount;
+  uint256 public totalAmountPerEpoch;
+  uint256 public lastWithdrawEpochId;
+  uint256 public lastInitializedEpoch;
 
   uint256 constant internal EPOCH_DELAY = 7 days;
   uint256 constant internal BASE_MULTIPLIER = 10 ** 18;
 
-  address internal _rewardFund;
+  address public rewardFund;
 
-  IERC20 internal _rewardsToken;
-  IERC20 internal _stakingToken;
+  IERC20 public rewardsToken;
+  IERC20 public stakingToken;
 
   struct Checkpoint {
     uint256 epochId;
@@ -39,7 +39,7 @@ contract FlexiblePool is ReentrancyGuard {
   }
 
   mapping(address => uint256) internal _balances;
-  mapping(address => uint256) private _lastEpochIdRewarded;
+  mapping(address => uint256) internal _lastEpochIdRewarded;
 
   mapping(uint256 => Pool) internal _poolSize;
   mapping(address => Checkpoint[]) internal _balanceCheckpoints;
@@ -51,22 +51,22 @@ contract FlexiblePool is ReentrancyGuard {
   event RewardsPaid(address indexed user, uint256 indexed epochId, uint256 amount);
   event MassRewardsPaid(address indexed user, uint256 epochsRewarded, uint256 totalValue);
 
-  constructor (
-    address rewardsToken,
-    address stakingToken,
-    address rewardFund,
-    uint256 epoch1Start,
-    uint256 epochsCount,
-    uint256 tokensPerEpoch
+  constructor(
+    address _rewardsToken,
+    address _stakingToken,
+    address _rewardFund,
+    uint256 _epoch1Start,
+    uint256 _epochsCount,
+    uint256 _tokensPerEpoch
   ) public {
-    _rewardsToken = IERC20(rewardsToken);
-    _stakingToken = IERC20(stakingToken);
+    rewardsToken = IERC20(_rewardsToken);
+    stakingToken = IERC20(_stakingToken);
 
-    _epoch1Start = epoch1Start;
-    _epochsCount = epochsCount;
-    _rewardFund = rewardFund;
+    epoch1Start = _epoch1Start;
+    epochsCount = _epochsCount;
+    rewardFund = _rewardFund;
     _epochs = new uint256[](_epochsCount + 1);
-    _totalAmountPerEpoch = tokensPerEpoch;
+    totalAmountPerEpoch = _tokensPerEpoch;
   }
 
   // ------------------
@@ -76,22 +76,22 @@ contract FlexiblePool is ReentrancyGuard {
   function stake(uint256 amount) external nonReentrant {
     require(amount > 0, "stake: Amount should be bigger 0!");
 
-    _stakingToken.safeTransferFrom(msg.sender, address(this), amount);
+    stakingToken.safeTransferFrom(msg.sender, address(this), amount);
     _balances[msg.sender] = _balances[msg.sender].add(amount);
 
-    uint256 currentEpoch = _getCurrentEpoch();
-    uint256 currentMultiplier = _currentEpochMultiplier();
+    uint256 currentEpoch = getCurrentEpoch();
+    uint256 currentMultiplier = getCurrentEpochMultiplier();
 
-    if (!_epochIsInitialized(currentEpoch)) {
+    if (!epochIsInitialized(currentEpoch)) {
       _manualEpochInit(currentEpoch);
     }
 
     Pool storage pNextEpoch = _poolSize[currentEpoch + 1];
-    pNextEpoch.size = _stakingToken.balanceOf(address(this));
+    pNextEpoch.size = stakingToken.balanceOf(address(this));
     pNextEpoch.set = true;
 
     Checkpoint[] storage checkpoints = _balanceCheckpoints[msg.sender];
-    uint256 balanceBefore = _getEpochUserBalance(msg.sender, currentEpoch);
+    uint256 balanceBefore = getEpochUserBalance(msg.sender, currentEpoch);
 
     if (checkpoints.length == 0) {
       checkpoints.push(Checkpoint(currentEpoch, currentMultiplier, 0, amount));
@@ -100,7 +100,7 @@ contract FlexiblePool is ReentrancyGuard {
       uint256 last = checkpoints.length - 1;
 
       if (checkpoints[last].epochId < currentEpoch) {
-        uint256 multiplier = _computeNewMultiplier(
+        uint256 multiplier = computeNewMultiplier(
         _getCheckpointBalance(checkpoints[last]),
           BASE_MULTIPLIER,
           amount,
@@ -109,7 +109,7 @@ contract FlexiblePool is ReentrancyGuard {
         checkpoints.push(Checkpoint(currentEpoch, multiplier, _getCheckpointBalance(checkpoints[last]), amount));
         checkpoints.push(Checkpoint(currentEpoch + 1, BASE_MULTIPLIER, _balances[msg.sender], 0));
       } else if (checkpoints[last].epochId == currentEpoch) {
-        checkpoints[last].multiplier = _computeNewMultiplier(
+        checkpoints[last].multiplier = computeNewMultiplier(
           _getCheckpointBalance(checkpoints[last]),
           checkpoints[last].multiplier,
           amount,
@@ -119,7 +119,7 @@ contract FlexiblePool is ReentrancyGuard {
         checkpoints.push(Checkpoint(currentEpoch + 1, BASE_MULTIPLIER, _balances[msg.sender], 0));
       } else {
         if (last >= 1 && checkpoints[last - 1].epochId == currentEpoch) {
-          checkpoints[last - 1].multiplier = _computeNewMultiplier(
+          checkpoints[last - 1].multiplier = computeNewMultiplier(
             _getCheckpointBalance(checkpoints[last - 1]),
             checkpoints[last - 1].multiplier,
             amount,
@@ -133,7 +133,7 @@ contract FlexiblePool is ReentrancyGuard {
       }
     }
 
-    uint256 balanceAfter = _getEpochUserBalance(msg.sender, currentEpoch);
+    uint256 balanceAfter = getEpochUserBalance(msg.sender, currentEpoch);
     _poolSize[currentEpoch].size = _poolSize[currentEpoch].size.add(balanceAfter.sub(balanceBefore));
 
     emit Deposit(msg.sender, amount);
@@ -143,17 +143,17 @@ contract FlexiblePool is ReentrancyGuard {
     require(_balances[msg.sender] >= amount, "withdraw: Not enough balance!");
 
     _balances[msg.sender] = _balances[msg.sender].sub(amount);
-    _stakingToken.safeTransfer(msg.sender, amount);
+    stakingToken.safeTransfer(msg.sender, amount);
 
-    uint256 currentEpoch = _getCurrentEpoch();
-    _lastWithdrawEpochId = currentEpoch;
+    uint256 currentEpoch = getCurrentEpoch();
+    lastWithdrawEpochId = currentEpoch;
 
-    if (!_epochIsInitialized(currentEpoch)) {
+    if (!epochIsInitialized(currentEpoch)) {
       _manualEpochInit(currentEpoch);
     }
 
     Pool storage pNextEpoch = _poolSize[currentEpoch + 1];
-    pNextEpoch.size = _stakingToken.balanceOf(address(this));
+    pNextEpoch.size = stakingToken.balanceOf(address(this));
     pNextEpoch.set = true;
 
     Checkpoint[] storage checkpoints = _balanceCheckpoints[msg.sender];
@@ -178,7 +178,7 @@ contract FlexiblePool is ReentrancyGuard {
         );
 
         currentEpochCheckpoint.newDeposits = currentEpochCheckpoint.newDeposits.sub(amount);
-        currentEpochCheckpoint.multiplier = _computeNewMultiplier(
+        currentEpochCheckpoint.multiplier = computeNewMultiplier(
           currentEpochCheckpoint.startBalance,
           BASE_MULTIPLIER,
           currentEpochCheckpoint.newDeposits,
@@ -201,24 +201,24 @@ contract FlexiblePool is ReentrancyGuard {
   }
 
   function emergencyWithdraw() public nonReentrant {
-    require((_getCurrentEpoch() - _lastWithdrawEpochId) >= 10, "emergencyWithdraw: At least 10 epochs must pass without success!");
+    require((getCurrentEpoch() - lastWithdrawEpochId) >= 10, "emergencyWithdraw: At least 10 epochs must pass without success!");
 
     uint256 totalUserBalance = _balances[msg.sender];
     require(totalUserBalance > 0, "emergencyWithdraw: Amount must be > 0!");
 
     _balances[msg.sender] = 0;
-    _stakingToken.safeTransfer(msg.sender, totalUserBalance);
+    stakingToken.safeTransfer(msg.sender, totalUserBalance);
 
     emit EmergencyWithdraw(msg.sender, totalUserBalance);
   }
 
-  function getReward(uint256 epochId) public nonReentrant returns (uint256) {
-    require(_getCurrentEpoch() > epochId, "getReward: Provided epoch is in the future!");
-    require(_lastEpochIdRewarded[msg.sender].add(1) == epochId, "getReward: Reward in order!");
+  function claimReward(uint256 epochId) public nonReentrant returns (uint256) {
+    require(getCurrentEpoch() > epochId, "claimReward: Provided epoch is in the future!");
+    require(_lastEpochIdRewarded[msg.sender].add(1) == epochId, "claimReward: Reward in order!");
 
     uint256 userReward = _rewardsAmount(epochId);
     if (userReward > 0) {
-      _rewardsToken.safeTransferFrom(_rewardFund, msg.sender, userReward);
+      rewardsToken.safeTransferFrom(rewardFund, msg.sender, userReward);
     }
 
     emit RewardsPaid(msg.sender, epochId, userReward);
@@ -228,10 +228,10 @@ contract FlexiblePool is ReentrancyGuard {
 
   function massRewards() external returns (uint256) {
     uint256 totalDistributedValue;
-    uint256 epochId = _getCurrentEpoch().sub(1);
+    uint256 epochId = getCurrentEpoch().sub(1);
 
-    if (epochId > _epochsCount) {
-      epochId = _epochsCount;
+    if (epochId > epochsCount) {
+      epochId = epochsCount;
     }
 
     for (uint256 i = _lastEpochIdRewarded[msg.sender] + 1; i <= epochId; i++) {
@@ -241,7 +241,7 @@ contract FlexiblePool is ReentrancyGuard {
     emit MassRewardsPaid(msg.sender, epochId - _lastEpochIdRewarded[msg.sender], totalDistributedValue);
 
     if (totalDistributedValue > 0) {
-      _rewardsToken.safeTransferFrom(_rewardFund, msg.sender, totalDistributedValue);
+      rewardsToken.safeTransferFrom(rewardFund, msg.sender, totalDistributedValue);
     }
 
     return totalDistributedValue;
@@ -250,33 +250,6 @@ contract FlexiblePool is ReentrancyGuard {
   // ------------------
   // GETTERS METHODS
   // ------------------
-
-  function getEpoch1Start() external view returns (uint256) {
-    return _epoch1Start;
-  }
-
-  function getEpochsCount() external view returns (uint256) {
-    return _epochsCount;
-  }
-
-  function getAmountPerEpoch() external view returns (uint256) {
-    return _totalAmountPerEpoch;
-  }
-
-  function getLastWithdrawEpochId() external view returns (uint256) {
-    return _lastWithdrawEpochId;
-  }
-
-  function getLastInitializedEpoch() external view returns (uint256) {
-    return _lastInitializedEpoch;
-  }
-
-  function getTokens() external view returns (address, address) {
-    return (
-      address(_rewardsToken),
-      address(_stakingToken)
-    );
-  }
 
   function getPoolSize(uint256 epochId) external view returns (uint256, bool) {
     return (
@@ -293,105 +266,28 @@ contract FlexiblePool is ReentrancyGuard {
     return _lastEpochIdRewarded[user];
   }
 
-  function getCurrentEpochMultiplier() external view returns (uint256) {
-    return _currentEpochMultiplier();
-  }
-
-  function getEpochPoolSize(uint256 epochId) external view returns (uint256) {
-    return _getEpochPoolSize(epochId);
-  }
-
-  function getComputeNewMultiplier(uint256 prevBalance, uint128 prevMultiplier, uint256 amount, uint128 currentMultiplier) external pure returns (uint256) {
-    return _computeNewMultiplier(prevBalance, prevMultiplier, amount, currentMultiplier);
-  }
-
-  function getUserEpochStake(address user, uint128 epochId) external view returns (uint256) {
-    return _getEpochUserBalance(user, epochId);
-  }
-
-  function getCurrentEpoch() external view returns (uint256) {
-    return _getCurrentEpoch();
-  }
-
-  function isEpochInitialized(uint256 epochId) external view returns (bool) {
-    return _epochIsInitialized(epochId);
-  }
-
-  // ------------------
-  // INTERNAL METHODS
-  // ------------------
-
-  function _manualEpochInit(uint256 epochId) internal {
-    require(epochId <= _getCurrentEpoch(), "_manualEpochInit: Can't init a future epoch!");
-    require(epochId <= _epochsCount, "_manualEpochInit: Should be less from max epochs count!");
-
-    Pool storage pool = _poolSize[epochId];
-
-    if (epochId == 0) {
-      pool.size = 0;
-      pool.set = true;
-    } else {
-      require(!_epochIsInitialized(epochId), "_manualEpochInit: epoch already initialized");
-      require(_epochIsInitialized(epochId - 1), "_manualEpochInit: previous epoch not initialized");
-
-      pool.size = _poolSize[epochId - 1].size;
-      pool.set = true;
-    }
-
-    emit ManualEpochInit(msg.sender, epochId);
-  }
-
-  function _getCurrentEpoch() internal view returns (uint256) {
-    if (block.timestamp < _epoch1Start) {
-      return 0;
-    }
-
-    return block.timestamp.sub(_epoch1Start).div(EPOCH_DELAY).add(1);
-  }
-
-  function _rewardsAmount(uint256 epochId) internal returns (uint256) {
-    if (_lastInitializedEpoch < epochId) {
-      _initEpoch(epochId);
-    }
-
-    _lastEpochIdRewarded[msg.sender] = epochId;
-
-    if (_epochs[epochId] == 0) {
-      return 0;
-    }
-
-    return _totalAmountPerEpoch.mul(_getEpochUserBalance(msg.sender, epochId + 1)).div(_epochs[epochId]);
-  }
-
-  function _initEpoch(uint256 epochId) internal {
-    require(_lastInitializedEpoch.add(1) == epochId, "_initEpoch: Epoch can be init only in order!");
-
-    _lastInitializedEpoch = epochId;
-    _epochs[epochId] = _getEpochPoolSize(epochId);
-  }
-
-  function _getEpochPoolSize(uint256 epochId) internal view returns (uint256) {
-    if (_epochIsInitialized(epochId)) {
+  function getEpochPoolSize(uint256 epochId) public view returns (uint256) {
+    if (epochIsInitialized(epochId)) {
       return _poolSize[epochId].size;
     }
 
-    if (!_epochIsInitialized(0)) {
+    if (!epochIsInitialized(0)) {
       return 0;
     }
 
-    return _stakingToken.balanceOf(address(this));
+    return stakingToken.balanceOf(address(this));
   }
 
-  function _currentEpochMultiplier() internal view returns (uint256) {
-    uint256 currentEpoch = _getCurrentEpoch();
-    uint256 currentEpochEnd = _epoch1Start.add(currentEpoch.mul(EPOCH_DELAY));
+  function getCurrentEpochMultiplier() public view returns (uint256) {
+    uint256 currentEpoch = getCurrentEpoch();
+    uint256 currentEpochEnd = epoch1Start.add(currentEpoch.mul(EPOCH_DELAY));
     uint256 timeLeft = currentEpochEnd.sub(block.timestamp);
     uint256 multiplier = uint256(timeLeft.mul(BASE_MULTIPLIER).div(EPOCH_DELAY));
 
     return multiplier;
   }
 
-  function _computeNewMultiplier(uint256 prevBalance, uint256 prevMultiplier, uint256 amount, uint256 currentMultiplier) internal pure returns (uint256) {
+  function computeNewMultiplier(uint256 prevBalance, uint256 prevMultiplier, uint256 amount, uint256 currentMultiplier) public pure returns (uint256) {
     uint256 prevAmount = prevBalance.mul(prevMultiplier).div(BASE_MULTIPLIER);
     uint256 addAmount = amount.mul(currentMultiplier).div(BASE_MULTIPLIER);
     uint256 newMultiplier = prevAmount.add(addAmount).mul(BASE_MULTIPLIER).div(prevBalance.add(amount));
@@ -399,11 +295,11 @@ contract FlexiblePool is ReentrancyGuard {
     return newMultiplier;
   }
 
-  function _epochIsInitialized(uint256 epochId) internal view returns (bool) {
+  function epochIsInitialized(uint256 epochId) public view returns (bool) {
     return _poolSize[epochId].set;
   }
 
-  function _getEpochUserBalance(address user, uint256 epochId) internal view returns (uint256) {
+  function getEpochUserBalance(address user, uint256 epochId) public view returns (uint256) {
     Checkpoint[] storage checkpoints = _balanceCheckpoints[user];
 
     if (checkpoints.length == 0 || epochId < checkpoints[0].epochId) {
@@ -427,6 +323,59 @@ contract FlexiblePool is ReentrancyGuard {
     }
 
     return _getCheckpointEffectiveBalance(checkpoints[min]);
+  }
+
+  function getCurrentEpoch() public view returns (uint256) {
+    if (block.timestamp < epoch1Start) {
+      return 0;
+    }
+
+    return block.timestamp.sub(epoch1Start).div(EPOCH_DELAY).add(1);
+  }
+
+  // ------------------
+  // INTERNAL METHODS
+  // ------------------
+
+  function _initEpoch(uint256 epochId) internal {
+    require(lastInitializedEpoch.add(1) == epochId, "_initEpoch: Epoch can be init only in order!");
+
+    lastInitializedEpoch = epochId;
+    _epochs[epochId] = getEpochPoolSize(epochId);
+  }
+
+  function _manualEpochInit(uint256 epochId) internal {
+    require(epochId <= getCurrentEpoch(), "_manualEpochInit: Can't init a future epoch!");
+    require(epochId <= epochsCount, "_manualEpochInit: Should be less from max epochs count!");
+
+    Pool storage pool = _poolSize[epochId];
+
+    if (epochId == 0) {
+      pool.size = 0;
+      pool.set = true;
+    } else {
+      require(!epochIsInitialized(epochId), "_manualEpochInit: epoch already initialized");
+      require(epochIsInitialized(epochId - 1), "_manualEpochInit: previous epoch not initialized");
+
+      pool.size = _poolSize[epochId - 1].size;
+      pool.set = true;
+    }
+
+    emit ManualEpochInit(msg.sender, epochId);
+  }
+
+  function _rewardsAmount(uint256 epochId) internal returns (uint256) {
+    if (lastInitializedEpoch < epochId) {
+      _initEpoch(epochId);
+    }
+
+    _lastEpochIdRewarded[msg.sender] = epochId;
+
+    if (_epochs[epochId] == 0) {
+      return 0;
+    }
+
+    return totalAmountPerEpoch.mul(getEpochUserBalance(msg.sender, epochId + 1)).div(_epochs[epochId]);
   }
 
   function _getCheckpointEffectiveBalance(Checkpoint memory checkpoint) internal pure returns (uint256) {
