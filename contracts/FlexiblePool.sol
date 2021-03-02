@@ -21,7 +21,7 @@ contract FlexiblePool is ReentrancyGuard {
   uint256 constant internal EPOCH_DELAY = 7 days;
   uint256 constant internal BASE_MULTIPLIER = 10 ** 18;
 
-  address internal _rewardFunds;
+  address internal _rewardFund;
 
   IERC20 internal _rewardsToken;
   IERC20 internal _stakingToken;
@@ -54,7 +54,7 @@ contract FlexiblePool is ReentrancyGuard {
   constructor (
     address rewardsToken,
     address stakingToken,
-    address rewardFunds,
+    address rewardFund,
     uint256 epoch1Start,
     uint256 epochsCount,
     uint256 tokensPerEpoch
@@ -64,7 +64,7 @@ contract FlexiblePool is ReentrancyGuard {
 
     _epoch1Start = epoch1Start;
     _epochsCount = epochsCount;
-    _rewardFunds = rewardFunds;
+    _rewardFund = rewardFund;
     _epochs = new uint256[](_epochsCount + 1);
     _totalAmountPerEpoch = tokensPerEpoch;
   }
@@ -218,7 +218,7 @@ contract FlexiblePool is ReentrancyGuard {
 
     uint256 userReward = _rewardsAmount(epochId);
     if (userReward > 0) {
-      _rewardsToken.safeTransferFrom(_rewardFunds, msg.sender, userReward);
+      _rewardsToken.safeTransferFrom(_rewardFund, msg.sender, userReward);
     }
 
     emit RewardsPaid(msg.sender, epochId, userReward);
@@ -241,7 +241,7 @@ contract FlexiblePool is ReentrancyGuard {
     emit MassRewardsPaid(msg.sender, epochId - _lastEpochIdRewarded[msg.sender], totalDistributedValue);
 
     if (totalDistributedValue > 0) {
-      _rewardsToken.safeTransferFrom(_rewardFunds, msg.sender, totalDistributedValue);
+      _rewardsToken.safeTransferFrom(_rewardFund, msg.sender, totalDistributedValue);
     }
 
     return totalDistributedValue;
