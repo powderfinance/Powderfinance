@@ -31,5 +31,8 @@
     "ethereum-waffle": "^3.2.2",
     "ethers": "^5.0.31",
     "hardhat": "^2.0.10"
+  },
+  "dependencies": {
+    "@nomiclabs/hardhat-etherscan": "^2.1.1"
   }
 }
