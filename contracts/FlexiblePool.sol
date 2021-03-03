@@ -279,12 +279,18 @@ contract FlexiblePool is ReentrancyGuard {
   }
 
   function getCurrentEpochMultiplier() public view returns (uint256) {
+    uint256 timeLeft = getSecondsUntilCurrentEpochEnd();
+    uint256 multiplier = timeLeft.mul(BASE_MULTIPLIER).div(EPOCH_DELAY);
+
+    return multiplier;
+  }
+
+  function getSecondsUntilCurrentEpochEnd() public view returns (uint256) {
     uint256 currentEpoch = getCurrentEpoch();
     uint256 currentEpochEnd = epoch1Start.add(currentEpoch.mul(EPOCH_DELAY));
     uint256 timeLeft = currentEpochEnd.sub(block.timestamp);
-    uint256 multiplier = uint256(timeLeft.mul(BASE_MULTIPLIER).div(EPOCH_DELAY));
 
-    return multiplier;
+    return timeLeft;
   }
 
   function computeNewMultiplier(uint256 prevBalance, uint256 prevMultiplier, uint256 amount, uint256 currentMultiplier) public pure returns (uint256) {
