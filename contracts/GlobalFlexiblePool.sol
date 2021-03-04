@@ -12,9 +12,9 @@ import "./interfaces/IGlobalEpoch.sol";
 contract GlobalFlexiblePool is ReentrancyGuard {
   using SafeMath for uint256;
 
-  uint256 public epoch1Start;
-  uint256 public epochDuration;
   uint256 constant private BASE_MULTIPLIER = 1 ether;
+
+  IGlobalEpoch internal globalEpoch;
 
   mapping(address => mapping(address => uint256)) private balances;
 
@@ -46,9 +46,8 @@ contract GlobalFlexiblePool is ReentrancyGuard {
   // ------------------
 
 
-  constructor(uint256 _epoch1Start, uint256 _epochDuration) public {
-    epoch1Start = _epoch1Start;
-    epochDuration = _epochDuration;
+  constructor(address _globalEpoch) public {
+    globalEpoch = IGlobalEpoch(_globalEpoch);
   }
 
 
@@ -68,7 +67,7 @@ contract GlobalFlexiblePool is ReentrancyGuard {
     token.transferFrom(msg.sender, address(this), amount);
 
     // epoch logic
-    uint256 currentEpoch = getCurrentEpoch();
+    uint256 currentEpoch = globalEpoch.getCurrentEpoch();
     uint256 currentMultiplier = currentEpochMultiplier();
 
     if (!epochIsInitialized(tokenAddress, currentEpoch)) {
@@ -152,7 +151,7 @@ contract GlobalFlexiblePool is ReentrancyGuard {
     token.transfer(msg.sender, amount);
 
     // epoch logic
-    uint256 currentEpoch = getCurrentEpoch();
+    uint256 currentEpoch = globalEpoch.getCurrentEpoch();
     lastWithdrawEpochId[tokenAddress] = currentEpoch;
 
     if (!epochIsInitialized(tokenAddress, currentEpoch)) {
@@ -222,7 +221,7 @@ contract GlobalFlexiblePool is ReentrancyGuard {
   }
 
   function manualEpochInit(address[] memory tokens, uint256 epochId) public {
-    require(epochId <= getCurrentEpoch(), "manualEpochInit: can't init a future epoch");
+    require(epochId <= globalEpoch.getCurrentEpoch(), "manualEpochInit: can't init a future epoch");
 
     for (uint256 i = 0; i < tokens.length; i++) {
       Pool storage p = poolSize[tokens[i]][epochId];
@@ -240,7 +239,7 @@ contract GlobalFlexiblePool is ReentrancyGuard {
   }
 
   function emergencyWithdraw(address tokenAddress) public {
-    require((getCurrentEpoch() - lastWithdrawEpochId[tokenAddress]) >= 10, "emergencyWithdraw: At least 10 epochs must pass without success");
+    require((globalEpoch.getCurrentEpoch() - lastWithdrawEpochId[tokenAddress]) >= 10, "emergencyWithdraw: At least 10 epochs must pass without success");
 
     uint256 totalUserBalance = balances[msg.sender][tokenAddress];
     require(totalUserBalance > 0, "emergencyWithdraw: Amount must be > 0");
@@ -290,14 +289,6 @@ contract GlobalFlexiblePool is ReentrancyGuard {
     return balances[user][token];
   }
 
-  function getCurrentEpoch() public view returns(uint256) {
-    if (block.timestamp < epoch1Start) {
-      return 0;
-    }
-
-    return (block.timestamp - epoch1Start) / epochDuration + 1;
-  }
-
   function getEpochPoolSize(address tokenAddress, uint256 epochId) public view returns(uint256) {
     // Premises:
     // 1. it's impossible to have gaps of uninitialized epochs
@@ -317,10 +308,8 @@ contract GlobalFlexiblePool is ReentrancyGuard {
   }
 
   function currentEpochMultiplier() public view returns(uint256) {
-    uint256 currentEpoch = getCurrentEpoch();
-    uint256 currentEpochEnd = epoch1Start + currentEpoch * epochDuration;
-    uint256 timeLeft = currentEpochEnd - block.timestamp;
-    uint256 multiplier = timeLeft * BASE_MULTIPLIER / epochDuration;
+    uint256 timeLeft = globalEpoch.getSecondsUntilNextEpoch();
+    uint256 multiplier = timeLeft * BASE_MULTIPLIER / _getEpochDuration();
 
     return multiplier;
   }
@@ -342,6 +331,13 @@ contract GlobalFlexiblePool is ReentrancyGuard {
   // INTERNAL METHODS
   // ------------------
 
+  function _getEpochDuration() internal view returns (uint256) {
+    return globalEpoch.getEpochDelay();
+  }
+
+  function _getFirstEpochTime() internal view returns (uint256) {
+    return globalEpoch.getFirstEpochTime();
+  }
 
   function _getCheckpointBalance(Checkpoint memory c) internal pure returns(uint256) {
     return c.startBalance.add(c.newDeposits);
