@@ -9,7 +9,7 @@ import "./interfaces/IGlobalEpoch.sol";
 contract GlobalEpoch is IGlobalEpoch {
   using SafeMath for uint256;
 
-  uint256 public epoch1Start;
+  uint256 internal _epoch1Start;
   uint256 constant internal EPOCH_DELAY = 7 days;
 
 
@@ -18,10 +18,10 @@ contract GlobalEpoch is IGlobalEpoch {
   // ------------------
 
 
-  constructor(uint256 _epoch1Start) public {
-    require(_epoch1Start > block.timestamp, "GlobalEpoch: First epoch should start in the future!");
+  constructor(uint256 epoch1Start) public {
+    require(epoch1Start > block.timestamp, "GlobalEpoch: First epoch should start in the future!");
 
-    epoch1Start = _epoch1Start;
+    _epoch1Start = epoch1Start;
   }
 
 
@@ -30,8 +30,16 @@ contract GlobalEpoch is IGlobalEpoch {
   // ------------------
 
 
+  function getFirstEpochTime() public view override returns (uint256) {
+    return _epoch1Start;
+  }
+
+  function getEpochDelay() public pure override returns (uint256) {
+    return EPOCH_DELAY;
+  }
+
   function getCurrentEpoch() public view override returns (uint256) {
-    if (block.timestamp <= epoch1Start) {
+    if (block.timestamp <= _epoch1Start) {
       return 0;
     }
 
@@ -40,14 +48,14 @@ contract GlobalEpoch is IGlobalEpoch {
 
   function getSecondsUntilNextEpoch() public view override returns (uint256) {
     uint256 currentEpoch = getCurrentEpoch();
-    uint256 currentEpochEnd = epoch1Start.add(currentEpoch.mul(EPOCH_DELAY));
+    uint256 currentEpochEnd = _epoch1Start.add(currentEpoch.mul(EPOCH_DELAY));
     uint256 timeLeft = currentEpochEnd.sub(block.timestamp);
 
     return timeLeft;
   }
 
   function getSecondsSinceThisEpoch() public view override returns (uint256) {
-    if (block.timestamp <= epoch1Start) {
+    if (block.timestamp <= _epoch1Start) {
       return 0;
     }
 
@@ -55,15 +63,15 @@ contract GlobalEpoch is IGlobalEpoch {
   }
 
   function getSecondsSinceFirstEpoch() public view override returns (uint256) {
-    if (block.timestamp <= epoch1Start) {
+    if (block.timestamp <= _epoch1Start) {
       return 0;
     }
 
-    return block.timestamp.sub(epoch1Start);
+    return block.timestamp.sub(_epoch1Start);
   }
 
   function isJuniorStakePeriod() public view override returns (bool) {
-    if (block.timestamp <= epoch1Start) {
+    if (block.timestamp <= _epoch1Start) {
       return false;
     }
 
