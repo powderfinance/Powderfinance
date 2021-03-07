@@ -256,7 +256,7 @@ contract GlobalFlexiblePool is ReentrancyGuard {
   // ------------------
 
 
-  function getEpochUserBalance(address user, address token, uint256 epochId) public view returns(uint256) {
+  function getEpochUserBalance(address user, address token, uint256 epochId) public view returns (uint256) {
     Checkpoint[] storage checkpoints = balanceCheckpoints[user][token];
 
     // if there are no checkpoints, it means the user never deposited any tokens, so the balance is 0
@@ -285,11 +285,11 @@ contract GlobalFlexiblePool is ReentrancyGuard {
     return _getCheckpointEffectiveBalance(checkpoints[min]);
   }
 
-  function balanceOf(address user, address token) public view returns(uint256) {
+  function balanceOf(address user, address token) public view returns (uint256) {
     return balances[user][token];
   }
 
-  function getEpochPoolSize(address tokenAddress, uint256 epochId) public view returns(uint256) {
+  function getEpochPoolSize(address tokenAddress, uint256 epochId) public view returns (uint256) {
     // Premises:
     // 1. it's impossible to have gaps of uninitialized epochs
     // - any deposit or withdraw initialize the current epoch which requires the previous one to be initialized
@@ -307,14 +307,14 @@ contract GlobalFlexiblePool is ReentrancyGuard {
     return IERC20(tokenAddress).balanceOf(address(this));
   }
 
-  function currentEpochMultiplier() public view returns(uint256) {
+  function currentEpochMultiplier() public view returns (uint256) {
     uint256 timeLeft = globalEpoch.getSecondsUntilNextEpoch();
-    uint256 multiplier = timeLeft * BASE_MULTIPLIER / _getEpochDuration();
+    uint256 multiplier = timeLeft * BASE_MULTIPLIER / globalEpoch.getEpochDelay();
 
     return multiplier;
   }
 
-  function computeNewMultiplier(uint256 prevBalance, uint256 prevMultiplier, uint256 amount, uint256 currentMultiplier) public pure returns(uint256) {
+  function computeNewMultiplier(uint256 prevBalance, uint256 prevMultiplier, uint256 amount, uint256 currentMultiplier) public pure returns (uint256) {
     uint256 prevAmount = prevBalance.mul(prevMultiplier).div(BASE_MULTIPLIER);
     uint256 addAmount = amount.mul(currentMultiplier).div(BASE_MULTIPLIER);
     uint256 newMultiplier = prevAmount.add(addAmount).mul(BASE_MULTIPLIER).div(prevBalance.add(amount));
@@ -322,7 +322,7 @@ contract GlobalFlexiblePool is ReentrancyGuard {
     return newMultiplier;
   }
 
-  function epochIsInitialized(address token, uint256 epochId) public view returns(bool) {
+  function epochIsInitialized(address token, uint256 epochId) public view returns (bool) {
     return poolSize[token][epochId].set;
   }
 
@@ -331,19 +331,12 @@ contract GlobalFlexiblePool is ReentrancyGuard {
   // INTERNAL METHODS
   // ------------------
 
-  function _getEpochDuration() internal view returns (uint256) {
-    return globalEpoch.getEpochDelay();
-  }
 
-  function _getFirstEpochTime() internal view returns (uint256) {
-    return globalEpoch.getFirstEpochTime();
-  }
-
-  function _getCheckpointBalance(Checkpoint memory c) internal pure returns(uint256) {
+  function _getCheckpointBalance(Checkpoint memory c) internal pure returns (uint256) {
     return c.startBalance.add(c.newDeposits);
   }
 
-  function _getCheckpointEffectiveBalance(Checkpoint memory c) internal pure returns(uint256) {
+  function _getCheckpointEffectiveBalance(Checkpoint memory c) internal pure returns (uint256) {
     return _getCheckpointBalance(c).mul(c.multiplier).div(BASE_MULTIPLIER);
   }
 }

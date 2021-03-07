@@ -17,7 +17,7 @@ contract FlexiblePool is ReentrancyGuard {
   uint256 public epochStart;
   uint256 public epochsCount;
   uint256 public epochDuration;
-  uint256 public totalAmountPerEpoch;
+  uint256 public totalRewardPerEpoch;
   uint256 public lastInitializedEpoch;
   uint256 public epochDelayedFromFirst;
   uint256[] private _epochs;
@@ -48,7 +48,7 @@ contract FlexiblePool is ReentrancyGuard {
     address _globalEpoch,
     address _globalFlexiblePool,
     address _rewardFunds,
-    uint256 _amountPerEpoch,
+    uint256 _rewardPerEpoch,
     uint256 _epochsCount,
     uint256 _epochDelayedFromFirst
   ) public {
@@ -64,11 +64,10 @@ contract FlexiblePool is ReentrancyGuard {
     rewardFunds = _rewardFunds;
 
     epochDuration = globalEpoch.getEpochDelay();
-    epochStart = globalEpoch.getFirstEpochTime() + epochDuration;
-
-    totalAmountPerEpoch = _amountPerEpoch;
-    epochsCount = _epochsCount;
     epochDelayedFromFirst = _epochDelayedFromFirst;
+    epochStart = globalEpoch.getFirstEpochTime() + epochDuration.mul(epochDelayedFromFirst);
+
+    totalRewardPerEpoch = _rewardPerEpoch;
     _epochs = new uint256[](epochsCount + 1);
   }
 
@@ -153,7 +152,7 @@ contract FlexiblePool is ReentrancyGuard {
       return 0;
     }
 
-    return totalAmountPerEpoch
+    return totalRewardPerEpoch
       .mul(_getUserBalancePerEpoch(msg.sender, epochId))
       .div(_epochs[epochId]);
   }
