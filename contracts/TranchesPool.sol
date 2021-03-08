@@ -3,13 +3,14 @@
 pragma solidity ^0.7.3;
 
 import "@openzeppelin/contracts/math/SafeMath.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "./interfaces/IConsolidation.sol";
 import "./interfaces/IGlobalEpoch.sol";
 
 
-contract TranchesPool is ReentrancyGuard {
+contract TranchesPool is Ownable {
   using SafeMath for uint256;
   using SafeERC20 for IERC20;
 
@@ -18,13 +19,12 @@ contract TranchesPool is ReentrancyGuard {
   uint256 public seniorRatio = 5 * BASE_MULTIPLIER;
   uint256 public totalRewardPerEpoch;
   uint256 public epochDelayedFromFirst;
-
   address public rewardFunds;
-  address public consolidation;
 
   IERC20 internal rewardToken;
   IERC20 internal stakingToken;
   IGlobalEpoch internal globalEpoch;
+  IConsolidation internal consolidation;
 
   enum Tranches { JUNIOR, SENIOR }
 
@@ -34,6 +34,7 @@ contract TranchesPool is ReentrancyGuard {
   }
 
   struct Epoch {
+    bool posted;
     Balances staked;
     Balances result;
   }
@@ -58,6 +59,7 @@ contract TranchesPool is ReentrancyGuard {
 
   event NewDeposit(address user, uint256 amount, Tranches tranche);
   event NewWithdraw(address user, uint256 amount, Tranches tranche);
+  event ResultsPosted(uint256 epochId, uint256 juniorResult, uint256 seniorResult);
 
   // ------------------
   // CONSTRUCTOR
@@ -75,9 +77,9 @@ contract TranchesPool is ReentrancyGuard {
     rewardToken = IERC20(_rewardToken);
     stakingToken = IERC20(_stakingToken);
     globalEpoch = IGlobalEpoch(_globalEpoch);
+    consolidation = IConsolidation(_consolidation);
 
     rewardFunds = _rewardFunds;
-    consolidation = _consolidation;
     totalRewardPerEpoch = _rewardPerEpoch;
     epochDelayedFromFirst = _epochDelayedFromFirst;
   }
@@ -87,7 +89,7 @@ contract TranchesPool is ReentrancyGuard {
   // ------------------
 
 
-  function deposit(uint256 amount, Tranches tranche) external nonReentrant {
+  function deposit(uint256 amount, Tranches tranche) public {
     require(amount > 0, "deposit: Amount can not be 0!");
 
     uint256 currentEpoch = _getCurrentEpoch();
@@ -98,7 +100,8 @@ contract TranchesPool is ReentrancyGuard {
       require(globalEpoch.isJuniorStakePeriod(), "deposit: Not junior stake period!");
 
       // Transfer tokens
-      stakingToken.safeTransferFrom(msg.sender, consolidation, amount);
+      stakingToken.safeTransferFrom(msg.sender, address(this), amount);
+      consolidation.safeKeep(address(stakingToken), amount);
 
       // Update epoch data
       epoch.staked.junior = epoch.staked.junior.add(amount);
@@ -114,7 +117,8 @@ contract TranchesPool is ReentrancyGuard {
       require(!_isSeniorLimitReached(currentEpoch, amount), "deposit: Senior pool limit is reached!");
 
       // Transfer tokens
-      stakingToken.safeTransferFrom(msg.sender, consolidation, amount);
+      stakingToken.safeTransferFrom(msg.sender, address(this), amount);
+      consolidation.safeKeep(address(stakingToken), amount);
 
       // Update epoch data
       epoch.staked.senior = epoch.staked.senior.add(amount);
@@ -132,6 +136,7 @@ contract TranchesPool is ReentrancyGuard {
 
   function withdraw(uint256 epochId, Tranches tranche) public {
     require(_getCurrentEpoch() > epochId, "withdraw: This epoch is in the future!");
+    require(_epochs[epochId].posted, "withdraw: Results not posted!");
 
     uint256 withdrawAmount = _calculateWithdrawAmount(epochId, msg.sender, tranche);
 
@@ -142,14 +147,17 @@ contract TranchesPool is ReentrancyGuard {
         _balances[msg.sender][epochId].juniorBalance = 0;
       }
 
-      stakingToken.safeTransferFrom(consolidation, msg.sender, withdrawAmount);
+      // Transfer tokens
+      consolidation.safeWithdraw(address(stakingToken), withdrawAmount);
+      stakingToken.safeTransfer(msg.sender, withdrawAmount);
     }
 
     emit NewWithdraw(msg.sender, withdrawAmount, tranche);
   }
 
   function clamReward(uint256 epochId, Tranches tranche) public {
-    require(_getCurrentEpoch() > epochId, "withdraw: This epoch is in the future!");
+    require(_getCurrentEpoch() > epochId, "clamReward: This epoch is in the future!");
+    require(_epochs[epochId].posted, "clamReward: Results not posted!");
 
     if (!_balances[msg.sender][epochId].rewardsClaimed) {
       uint256 availableReward = _calculateReward(epochId, msg.sender, tranche);
@@ -159,9 +167,24 @@ contract TranchesPool is ReentrancyGuard {
     }
   }
 
-  function exit(uint256 epochId, Tranches tranche) external {
+  function exit(uint256 epochId, Tranches tranche) public {
     withdraw(epochId, tranche);
     clamReward(epochId, tranche);
+  }
+
+  function postResults(uint256 epochId, uint256 juniorResult, uint256 seniorResult) public onlyOwner {
+    require(_getCurrentEpoch() > epochId, "postResults: This epoch is in the future!");
+    require(globalEpoch.isJuniorStakePeriod(), "postResults: Not results posting period!");
+
+    Epoch storage epoch = _epochs[epochId];
+    require(!epoch.posted, "postResults: Already posted!");
+    require(juniorResult.add(seniorResult) == epoch.staked.senior.add(epoch.staked.junior), "postResults: Results and actual size should be the same!");
+
+    epoch.posted = true;
+    epoch.result.junior = juniorResult;
+    epoch.result.senior = seniorResult;
+
+    emit ResultsPosted(epochId, juniorResult, seniorResult);
   }
 
 
