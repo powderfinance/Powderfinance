@@ -68,6 +68,7 @@ contract FlexiblePool is ReentrancyGuard {
     epochStart = globalEpoch.getFirstEpochTime() + epochDuration.mul(epochDelayedFromFirst);
 
     totalRewardPerEpoch = _rewardPerEpoch;
+    epochsCount = _epochsCount;
     _epochs = new uint256[](epochsCount + 1);
   }
 
@@ -79,7 +80,7 @@ contract FlexiblePool is ReentrancyGuard {
 
   function massHarvest() external nonReentrant returns (uint256) {
     uint256 totalDistributedValue;
-    uint256 epochId = globalEpoch.getCurrentEpoch().sub(1);
+    uint256 epochId = _getEpochId().sub(1);
 
     if (epochId > epochsCount) {
       epochId = epochsCount;
@@ -99,8 +100,8 @@ contract FlexiblePool is ReentrancyGuard {
   }
 
   function harvest(uint256 epochId) external nonReentrant returns (uint256) {
-    require(globalEpoch.getCurrentEpoch() > epochId, "harvest: This epoch is in the future!");
-    require(epochId <= epochsCount, "harvest: Maximum number of epochs is 100!");
+    require(_getEpochId() > epochId, "harvest: This epoch is in the future!");
+    require(epochId <= epochsCount, "harvest: Reached maximum number of epochs!");
     require(lastEpochIdHarvested[msg.sender].add(1) == epochId, "harvest: Harvest in order!");
 
     uint256 userReward = _harvest(epochId);
@@ -168,11 +169,19 @@ contract FlexiblePool is ReentrancyGuard {
     return globalFlexiblePool.getEpochPoolSize(stakingToken, globalFlexiblePoolEpochId(epochId));
   }
 
+  function _getEpochId() internal view returns (uint256) {
+    if (block.timestamp < epochStart) {
+      return 0;
+    }
+
+    return block.timestamp.sub(epochStart).div(epochDuration).add(1);
+  }
+
   function _getUserBalancePerEpoch(address userAddress, uint256 epochId) internal view returns (uint256) {
     return globalFlexiblePool.getEpochUserBalance(userAddress, stakingToken, globalFlexiblePoolEpochId(epochId));
   }
 
-  function globalFlexiblePoolEpochId(uint256 epochId) pure internal returns (uint256) {
-    return epochId + 1;
+  function globalFlexiblePoolEpochId(uint256 epochId) view internal returns (uint256) {
+    return epochId + epochDelayedFromFirst;
   }
 }

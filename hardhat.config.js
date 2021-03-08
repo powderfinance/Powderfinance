@@ -1,5 +1,6 @@
 require("@nomiclabs/hardhat-waffle");
 require("@nomiclabs/hardhat-etherscan");
+require("@nomiclabs/hardhat-web3");
 
 const INFURA_PROJECT_ID = "---"; // DEMO key
 const ETHERSCAN_API_ID = "---"; // DEMO ID

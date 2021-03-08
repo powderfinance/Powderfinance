@@ -16,6 +16,9 @@ contract TranchesPool is Ownable {
 
   uint256 public constant BASE_MULTIPLIER = 1 ether;
 
+  uint256 public epochStart;
+  uint256 public epochsCount;
+  uint256 public epochDuration;
   uint256 public seniorRatio = 5 * BASE_MULTIPLIER;
   uint256 public totalRewardPerEpoch;
   uint256 public epochDelayedFromFirst;
@@ -72,12 +75,17 @@ contract TranchesPool is Ownable {
     address _rewardFunds,
     address _consolidation,
     uint256 _rewardPerEpoch,
+    uint256 _epochsCount,
     uint256 _epochDelayedFromFirst
   ) public {
     rewardToken = IERC20(_rewardToken);
     stakingToken = IERC20(_stakingToken);
     globalEpoch = IGlobalEpoch(_globalEpoch);
     consolidation = IConsolidation(_consolidation);
+
+    epochsCount = _epochsCount;
+    epochDuration = globalEpoch.getEpochDelay();
+    epochStart = globalEpoch.getFirstEpochTime() + epochDuration.mul(epochDelayedFromFirst);
 
     rewardFunds = _rewardFunds;
     totalRewardPerEpoch = _rewardPerEpoch;
@@ -136,6 +144,7 @@ contract TranchesPool is Ownable {
 
   function withdraw(uint256 epochId, Tranches tranche) public {
     require(_getCurrentEpoch() > epochId, "withdraw: This epoch is in the future!");
+    require(epochsCount >= epochId, "withdraw: Reached maximum number of epochs!");
     require(_epochs[epochId].posted, "withdraw: Results not posted!");
 
     uint256 withdrawAmount = _calculateWithdrawAmount(epochId, msg.sender, tranche);
@@ -157,6 +166,7 @@ contract TranchesPool is Ownable {
 
   function clamReward(uint256 epochId, Tranches tranche) public {
     require(_getCurrentEpoch() > epochId, "clamReward: This epoch is in the future!");
+    require(epochsCount >= epochId, "clamReward: Reached maximum number of epochs!");
     require(_epochs[epochId].posted, "clamReward: Results not posted!");
 
     if (!_balances[msg.sender][epochId].rewardsClaimed) {
@@ -174,6 +184,7 @@ contract TranchesPool is Ownable {
 
   function postResults(uint256 epochId, uint256 juniorResult, uint256 seniorResult) public onlyOwner {
     require(_getCurrentEpoch() > epochId, "postResults: This epoch is in the future!");
+    require(epochsCount >= epochId, "clamReward: Reached maximum number of epochs!");
     require(globalEpoch.isJuniorStakePeriod(), "postResults: Not results posting period!");
 
     Epoch storage epoch = _epochs[epochId];
@@ -234,7 +245,11 @@ contract TranchesPool is Ownable {
   // ------------------
 
   function _getCurrentEpoch() internal view returns (uint256) {
-    return globalEpoch.getCurrentEpoch();
+    if (block.timestamp < epochStart) {
+      return 0;
+    }
+
+    return block.timestamp.sub(epochStart).div(epochDuration).add(1);
   }
 
   function _calculateWithdrawAmount(uint256 epochId, address userAddress, Tranches tranche) internal view returns (uint256) {

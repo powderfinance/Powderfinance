@@ -57,11 +57,11 @@ contract GlobalFlexiblePool is ReentrancyGuard {
 
 
   function deposit(address tokenAddress, uint256 amount) public nonReentrant {
-    require(amount > 0, "deposit: Amount must be > 0");
+    require(amount > 0, "deposit: Amount must be > 0!");
 
     IERC20 token = IERC20(tokenAddress);
     uint256 allowance = token.allowance(msg.sender, address(this));
-    require(allowance >= amount, "deposit: Token allowance too small");
+    require(allowance >= amount, "deposit: Token allowance too small!");
 
     balances[msg.sender][tokenAddress] = balances[msg.sender][tokenAddress].add(amount);
     token.transferFrom(msg.sender, address(this), amount);
@@ -143,7 +143,8 @@ contract GlobalFlexiblePool is ReentrancyGuard {
   }
 
   function withdraw(address tokenAddress, uint256 amount) public nonReentrant {
-    require(balances[msg.sender][tokenAddress] >= amount, "withdraw: balance too small");
+    require(amount > 0, "withdraw: Amount must be > 0!");
+    require(balances[msg.sender][tokenAddress] >= amount, "withdraw: Balance too small!");
 
     balances[msg.sender][tokenAddress] = balances[msg.sender][tokenAddress].sub(amount);
 
@@ -221,7 +222,7 @@ contract GlobalFlexiblePool is ReentrancyGuard {
   }
 
   function manualEpochInit(address[] memory tokens, uint256 epochId) public {
-    require(epochId <= globalEpoch.getCurrentEpoch(), "manualEpochInit: can't init a future epoch");
+    require(epochId <= globalEpoch.getCurrentEpoch(), "manualEpochInit: Can't init a future epoch!");
 
     for (uint256 i = 0; i < tokens.length; i++) {
       Pool storage p = poolSize[tokens[i]][epochId];
@@ -239,10 +240,10 @@ contract GlobalFlexiblePool is ReentrancyGuard {
   }
 
   function emergencyWithdraw(address tokenAddress) public {
-    require((globalEpoch.getCurrentEpoch() - lastWithdrawEpochId[tokenAddress]) >= 10, "emergencyWithdraw: At least 10 epochs must pass without success");
+    require((globalEpoch.getCurrentEpoch() - lastWithdrawEpochId[tokenAddress]) >= 10, "emergencyWithdraw: At least 10 epochs must pass without success!");
 
     uint256 totalUserBalance = balances[msg.sender][tokenAddress];
-    require(totalUserBalance > 0, "emergencyWithdraw: Amount must be > 0");
+    require(totalUserBalance > 0, "emergencyWithdraw: Amount must be > 0!");
 
     balances[msg.sender][tokenAddress] = 0;
     IERC20(tokenAddress).transfer(msg.sender, totalUserBalance);
