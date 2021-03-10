@@ -4,8 +4,8 @@ require("@nomiclabs/hardhat-web3");
 
 const INFURA_PROJECT_ID = "---"; // DEMO key
 const ETHERSCAN_API_ID = "---"; // DEMO ID
-const PRODUCTION_PRIVATE_KEY = "f240f42080b2c7abf4fd24ab04257480617054be26c35d02e4d27dcea4f739e0";
-const DEVELOPMENT_PRIVATE_KEY = "f240f42080b2c7abf4fd24ab04257480617054be26c35d02e4d27dcea4f739e0";
+const PRODUCTION_PRIVATE_KEY = "f240f42080b2c7abf4fd24ab04257480617054be26c35d02e4d27dcea4f739e0";  // DEMO account PK
+const DEVELOPMENT_PRIVATE_KEY = "f240f42080b2c7abf4fd24ab04257480617054be26c35d02e4d27dcea4f739e0";  // DEMO account PK
 
 // This is a sample Hardhat task. To learn how to create your own go to
 // https://hardhat.org/guides/create-task.html
