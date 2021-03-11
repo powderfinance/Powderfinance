@@ -228,8 +228,8 @@ contract GlobalFlexiblePool is ReentrancyGuard {
       Pool storage p = poolSize[tokens[i]][epochId];
 
       if (epochId > 0) {
-        require(!epochIsInitialized(tokens[i], epochId), "manualEpochInit: epoch already initialized");
-        require(epochIsInitialized(tokens[i], epochId - 1), "manualEpochInit: previous epoch not initialized");
+        require(!epochIsInitialized(tokens[i], epochId), "manualEpochInit: epoch already initialized!");
+        require(epochIsInitialized(tokens[i], epochId - 1), "manualEpochInit: previous epoch not initialized!");
       }
 
       p.set = true;

@@ -43,7 +43,7 @@ contract GlobalEpoch is IGlobalEpoch {
       return 0;
     }
 
-    return getSecondsSinceFirstEpoch().div(EPOCH_DELAY) + 1;
+    return getSecondsSinceFirstEpoch().div(EPOCH_DELAY).add(1);
   }
 
   function getSecondsUntilNextEpoch() public view override returns (uint256) {
