@@ -39,6 +39,8 @@ contract Consolidation is ReentrancyGuard {
   //  ----------------
 
   function safeWithdraw(uint256 amount) external nonReentrant {
+    require(_balances[msg.sender][ETH_ADDRESS] >= amount, "safeWithdraw: Not enough funds!");
+
     // Decrease contract deposited funds
     _balances[msg.sender][ETH_ADDRESS] = _balances[msg.sender][ETH_ADDRESS].sub(amount);
 
@@ -47,6 +49,8 @@ contract Consolidation is ReentrancyGuard {
   }
 
   function safeWithdraw(IERC20 token, uint256 amount) external nonReentrant {
+    require(_balances[msg.sender][address(token)] >= amount, "safeWithdraw: Not enough funds!");
+
     // Decrease contract deposited funds
     _balances[msg.sender][address(token)] = _balances[msg.sender][address(token)].sub(amount);
 

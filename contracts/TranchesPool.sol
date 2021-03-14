@@ -20,7 +20,7 @@ contract TranchesPool is Ownable {
   uint256 public epochsCount;
   uint256 public epochDuration;
   uint256 public seniorRatio = 5 * BASE_MULTIPLIER;
-  uint256 public totalRewardPerEpoch;
+  uint256 public rewardPerEpoch;
   uint256 public epochDelayedFromFirst;
   address public rewardFunds;
 
@@ -52,7 +52,9 @@ contract TranchesPool is Ownable {
   struct UserHistory {
     uint256 juniorBalance;
     uint256 seniorBalance;
-    bool rewardsClaimed;
+
+    bool juniorRewardsClaimed;
+    bool seniorRewardsClaimed;
 
     Checkpoint[] juniorCheckpoints;
     Checkpoint[] seniorCheckpoints;
@@ -88,7 +90,7 @@ contract TranchesPool is Ownable {
     epochStart = globalEpoch.getFirstEpochTime() + epochDuration.mul(epochDelayedFromFirst);
 
     rewardFunds = _rewardFunds;
-    totalRewardPerEpoch = _rewardPerEpoch;
+    rewardPerEpoch = _rewardPerEpoch;
     epochDelayedFromFirst = _epochDelayedFromFirst;
   }
 
@@ -101,6 +103,8 @@ contract TranchesPool is Ownable {
     require(amount > 0, "deposit: Amount can not be 0!");
 
     uint256 currentEpoch = _getCurrentEpoch();
+    require(currentEpoch > 0, "deposit: Not started yet!");
+
     Epoch storage epoch = _epochs[currentEpoch];
     UserHistory storage user = _balances[msg.sender][currentEpoch];
 
@@ -109,7 +113,7 @@ contract TranchesPool is Ownable {
 
       // Transfer tokens
       stakingToken.safeTransferFrom(msg.sender, address(this), amount);
-      consolidation.safeKeep(address(stakingToken), amount);
+      _safeKeep(amount);
 
       // Update epoch data
       epoch.staked.junior = epoch.staked.junior.add(amount);
@@ -120,13 +124,13 @@ contract TranchesPool is Ownable {
         deposit: amount,
         multiplier: _currentEpochMultiplier()
       }));
-    } else {
-      require(!globalEpoch.isJuniorStakePeriod(), "deposit: Not junior stake period!");
+    } else if (tranche == Tranches.SENIOR) {
+      require(!globalEpoch.isJuniorStakePeriod(), "deposit: Only junior tranche accepted now!");
       require(!_isSeniorLimitReached(currentEpoch, amount), "deposit: Senior pool limit is reached!");
 
       // Transfer tokens
       stakingToken.safeTransferFrom(msg.sender, address(this), amount);
-      consolidation.safeKeep(address(stakingToken), amount);
+      _safeKeep(amount);
 
       // Update epoch data
       epoch.staked.senior = epoch.staked.senior.add(amount);
@@ -169,10 +173,13 @@ contract TranchesPool is Ownable {
     require(epochsCount >= epochId, "clamReward: Reached maximum number of epochs!");
     require(_epochs[epochId].posted, "clamReward: Results not posted!");
 
-    if (!_balances[msg.sender][epochId].rewardsClaimed) {
-      uint256 availableReward = _calculateReward(epochId, msg.sender, tranche);
-      _balances[msg.sender][epochId].rewardsClaimed = true;
+    uint256 availableReward = _calculateReward(epochId, msg.sender, tranche);
 
+    if (tranche == Tranches.JUNIOR && !_balances[msg.sender][epochId].juniorRewardsClaimed) {
+      _balances[msg.sender][epochId].juniorRewardsClaimed = true;
+      rewardToken.safeTransferFrom(rewardFunds, msg.sender, availableReward);
+    } else if (tranche == Tranches.SENIOR && !_balances[msg.sender][epochId].seniorRewardsClaimed) {
+      _balances[msg.sender][epochId].seniorRewardsClaimed = true;
       rewardToken.safeTransferFrom(rewardFunds, msg.sender, availableReward);
     }
   }
@@ -189,7 +196,7 @@ contract TranchesPool is Ownable {
 
     Epoch storage epoch = _epochs[epochId];
     require(!epoch.posted, "postResults: Already posted!");
-    require(juniorResult.add(seniorResult) == epoch.staked.senior.add(epoch.staked.junior), "postResults: Results and actual size should be the same!");
+    require(juniorResult.add(seniorResult) == epoch.staked.junior.add(epoch.staked.senior), "postResults: Results and actual size should be the same!");
 
     epoch.posted = true;
     epoch.result.junior = juniorResult;
@@ -229,7 +236,11 @@ contract TranchesPool is Ownable {
   }
 
   function getAvailableReward(uint256 epochId, address userAddress, Tranches tranche) public view returns (uint256) {
-    if (_balances[userAddress][epochId].rewardsClaimed) {
+    if (tranche == Tranches.JUNIOR && _balances[userAddress][epochId].juniorRewardsClaimed) {
+      return 0;
+    }
+
+    if (tranche == Tranches.SENIOR && _balances[userAddress][epochId].seniorRewardsClaimed) {
       return 0;
     }
 
@@ -280,7 +291,7 @@ contract TranchesPool is Ownable {
     uint256 juniorStaked = _epochs[epochId].staked.junior;
     uint256 seniorStaked = _epochs[epochId].staked.senior;
 
-    return seniorStaked.add(amount).mul(BASE_MULTIPLIER) <= juniorStaked.mul(seniorRatio);
+    return seniorStaked.add(amount).mul(BASE_MULTIPLIER) > juniorStaked.mul(seniorRatio);
   }
 
   function _currentEpochMultiplier() internal view returns (uint256) {
@@ -298,23 +309,22 @@ contract TranchesPool is Ownable {
     if (tranche == Tranches.JUNIOR) {
       epochPoolSize = _epochs[epochId].staked.junior;
       checkpoints = _balances[userAddress][epochId].juniorCheckpoints;
-    } else {
+    } else if (tranche == Tranches.SENIOR) {
       epochPoolSize = _epochs[epochId].staked.senior;
       checkpoints = _balances[userAddress][epochId].seniorCheckpoints;
     }
 
     for (uint256 i = 0; i < checkpoints.length; i++) {
-      availableReward = availableReward.add(checkpoints[i].deposit.mul(checkpoints[i].multiplier)).div(epochPoolSize).div(BASE_MULTIPLIER);
+      uint256 effectiveAmount = checkpoints[i].deposit.mul(checkpoints[i].multiplier).div(BASE_MULTIPLIER);
+      availableReward = availableReward.add(rewardPerEpoch.mul(effectiveAmount).div(epochPoolSize));
     }
 
     return availableReward;
   }
 
-  // - Withdraw amount based on time when user staked LP to tranche
-  // - Users should receive POWDER rewards
-  // - (OK) Every epoch users need to unstake/stake
-  // - (OK) Staked tokens should go to consolidation contract
-  // - (OK) Only in Saturdays users can join to Junior pool
-  // - (OK) Rate between Junior Senior is 1:5
-  // - (OK) Epoch contains data: Id, Junior, Senior, Rate, Result
+  function _safeKeep(uint256 amount) internal {
+    stakingToken.safeApprove(address(consolidation), amount);
+    consolidation.safeKeep(address(stakingToken), amount);
+    stakingToken.safeApprove(address(consolidation), 0);
+  }
 }
