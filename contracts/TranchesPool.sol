@@ -191,7 +191,7 @@ contract TranchesPool is Ownable {
 
   function postResults(uint256 epochId, uint256 juniorResult, uint256 seniorResult) public onlyOwner {
     require(_getCurrentEpoch() > epochId, "postResults: This epoch is in the future!");
-    require(epochsCount >= epochId, "clamReward: Reached maximum number of epochs!");
+    require(epochsCount >= epochId, "postResults: Reached maximum number of epochs!");
     require(globalEpoch.isJuniorStakePeriod(), "postResults: Not results posting period!");
 
     Epoch storage epoch = _epochs[epochId];
