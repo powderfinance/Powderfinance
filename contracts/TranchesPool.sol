@@ -205,6 +205,10 @@ contract TranchesPool is Ownable {
     emit ResultsPosted(epochId, juniorResult, seniorResult);
   }
 
+  function changeRewardsPerEpoch(uint256 newRewards) public onlyOwner {
+    rewardPerEpoch = newRewards;
+  }
+
 
   // ------------------
   // GETTERS
