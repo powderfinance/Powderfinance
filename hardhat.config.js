@@ -1,11 +1,14 @@
+require('dotenv').config()
+require('dotenv').config()
 require("@nomiclabs/hardhat-waffle");
 require("@nomiclabs/hardhat-etherscan");
 require("@nomiclabs/hardhat-web3");
 
-const INFURA_PROJECT_ID = "---"; // DEMO key
-const ETHERSCAN_API_ID = "---"; // DEMO ID
-const PRODUCTION_PRIVATE_KEY = "f240f42080b2c7abf4fd24ab04257480617054be26c35d02e4d27dcea4f739e0";  // DEMO account PK
-const DEVELOPMENT_PRIVATE_KEY = "f240f42080b2c7abf4fd24ab04257480617054be26c35d02e4d27dcea4f739e0";  // DEMO account PK
+const {
+  INFURA_PROJECT_ID,
+  ETHERSCAN_API_ID,
+  DEPLOYER_PRIVATE_KEY
+} = process.env
 
 // This is a sample Hardhat task. To learn how to create your own go to
 // https://hardhat.org/guides/create-task.html
@@ -36,23 +39,23 @@ module.exports = {
   networks: {
     mainnet: {
       url: `https://mainnet.infura.io/v3/${INFURA_PROJECT_ID}`,
-      accounts: [`0x${PRODUCTION_PRIVATE_KEY}`]
+      accounts: [`0x${DEPLOYER_PRIVATE_KEY}`]
     },
     ropsten: {
       url: `https://ropsten.infura.io/v3/${INFURA_PROJECT_ID}`,
-      accounts: [`0x${DEVELOPMENT_PRIVATE_KEY}`]
+      accounts: [`0x${DEPLOYER_PRIVATE_KEY}`]
     },
     rinkeby: {
       url: `https://rinkeby.infura.io/v3/${INFURA_PROJECT_ID}`,
-      accounts: [`0x${DEVELOPMENT_PRIVATE_KEY}`]
+      accounts: [`0x${DEPLOYER_PRIVATE_KEY}`]
     },
     goerli: {
       url: `https://goerli.infura.io/v3/${INFURA_PROJECT_ID}`,
-      accounts: [`0x${DEVELOPMENT_PRIVATE_KEY}`]
+      accounts: [`0x${DEPLOYER_PRIVATE_KEY}`]
     },
     kovan: {
       url: `https://kovan.infura.io/v3/${INFURA_PROJECT_ID}`,
-      accounts: [`0x${DEVELOPMENT_PRIVATE_KEY}`]
+      accounts: [`0x${DEPLOYER_PRIVATE_KEY}`]
     }
   },
   etherscan: {
